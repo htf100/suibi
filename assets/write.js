@@ -9,8 +9,9 @@
   marked.setOptions({ gfm: true, breaks: true });
   const $ = selector => document.querySelector(selector);
   const fields = {
-    title: $('#essay-title'), date: $('#essay-date'), tags: $('#essay-tags'),
-    summary: $('#essay-summary'), slug: $('#essay-slug'), body: $('#essay-body')
+    title: $('#essay-title'), date: $('#essay-date'), time: $('#essay-time'),
+    location: $('#essay-location'), tags: $('#essay-tags'), summary: $('#essay-summary'),
+    slug: $('#essay-slug'), body: $('#essay-body')
   };
   const saveStatus = $('#save-status');
   const publishStatus = $('#publish-status');
@@ -22,9 +23,13 @@
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
+  function nowTime() {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
   function makeDraft() {
     const id = crypto.randomUUID();
-    return { id, title: '', date: today(), tags: '', summary: '', slug: `essay-${id.slice(0, 8)}`,
+    return { id, title: '', date: today(), time: nowTime(), location: '', tags: '', summary: '', slug: `essay-${id.slice(0, 8)}`,
       body: '', updatedAt: Date.now(), publishedPath: null, publishedSha: null };
   }
   function readDrafts() {
@@ -83,7 +88,7 @@
       const title = document.createElement('strong');
       title.textContent = draft.title.trim() || '未命名随笔';
       const detail = document.createElement('small');
-      detail.textContent = `${draft.date || '未设日期'} · ${draft.publishedPath ? '已发布' : '草稿'}`;
+      detail.textContent = `${draft.date || '未设日期'}${draft.time ? ` ${draft.time}` : ''} · ${draft.publishedPath ? '已发布' : '草稿'}`;
       button.append(title, detail);
       button.addEventListener('click', () => {
         if (draft.id === activeId) return;
@@ -122,7 +127,7 @@
     if (end < 0) return { body: text, metadata: {} };
     const metadata = {};
     for (const line of text.slice(4, end).split('\n')) {
-      const match = line.match(/^(title|date|summary|tags|slug):\s*(.*)$/);
+      const match = line.match(/^(title|date|time|location|summary|tags|slug):\s*(.*)$/);
       if (!match) continue;
       let value = match[2].trim();
       if (value.startsWith('"') && value.endsWith('"')) {
@@ -160,6 +165,8 @@
       const draft = makeDraft();
       draft.title = metadata.title || fileTitle(file.name);
       draft.date = /^\d{4}-\d{2}-\d{2}$/.test(metadata.date || '') ? metadata.date : today();
+      draft.time = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(metadata.time || '') ? metadata.time : (['md', 'markdown'].includes(ext) ? '' : nowTime());
+      draft.location = metadata.location || '';
       draft.summary = metadata.summary || '';
       draft.tags = metadata.tags || '';
       draft.slug = /^[a-z0-9-]+$/.test(metadata.slug || '') ? metadata.slug : draft.slug;
@@ -176,7 +183,7 @@
   function frontMatter(draft) {
     const summary = draft.summary.trim() || draft.body.replace(/[#>*_`\[\]()]/g, '').replace(/\s+/g, ' ').trim().slice(0, 90);
     const tags = draft.tags.split(/[,，]/).map(tag => tag.trim()).filter(Boolean);
-    return `---\ntitle: ${JSON.stringify(draft.title.trim())}\ndate: ${draft.date}\nsummary: ${JSON.stringify(summary)}\ntags: ${JSON.stringify(tags)}\nslug: ${draft.slug.trim()}\n---\n\n${draft.body.trim()}\n`;
+    return `---\ntitle: ${JSON.stringify(draft.title.trim())}\ndate: ${draft.date}\n${draft.time ? `time: ${JSON.stringify(draft.time)}\n` : ''}${draft.location.trim() ? `location: ${JSON.stringify(draft.location.trim())}\n` : ''}summary: ${JSON.stringify(summary)}\ntags: ${JSON.stringify(tags)}\nslug: ${draft.slug.trim()}\n---\n\n${draft.body.trim()}\n`;
   }
   function downloadDraft() {
     if (!persist()) return;
@@ -245,6 +252,8 @@
     if (!draft.title.trim() || !draft.body.trim()) return setPublishStatus('请先填写标题和正文。');
     const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(draft.date) && !Number.isNaN(Date.parse(`${draft.date}T12:00:00Z`)) && new Date(`${draft.date}T12:00:00Z`).toISOString().slice(0, 10) === draft.date;
     if (!dateValid) return setPublishStatus('请填写有效日期。');
+    if (draft.time && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft.time)) return setPublishStatus('请填写有效的写作时间。');
+    if (draft.location.length > 100) return setPublishStatus('写作地点不能超过 100 个字。');
     if (!/^[a-z0-9-]+$/.test(draft.slug)) return setPublishStatus('文章地址只能使用小写英文、数字和短横线。');
     const tokenInput = $('#github-token');
     const token = tokenInput.value.trim();

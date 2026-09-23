@@ -1,6 +1,8 @@
 ---
 title: 普通的一天，也值得记录
 date: 2026-09-22
+time: "18:35"
+location: 街角（示例）
 summary: 一篇展示文字排版与文章列表的示例随笔。写作可以从身边很小的事情开始。
 tags: [日常, 示例]
 slug: ordinary-day

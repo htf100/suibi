@@ -49,7 +49,11 @@ function tagsMarkup(tags) {
   return tags.map(tag => `<span class="tag">${html(tag)}</span>`).join('');
 }
 function metaLine(post) {
-  return `<span>${dateLabel(post.date)}</span><span class="meta-dot" aria-hidden="true"></span><span>${post.minutes} 分钟阅读</span>`;
+  return `<span>${dateLabel(post.date)}${post.time ? ` ${html(post.time)}` : ''}</span><span class="meta-dot" aria-hidden="true"></span><span>${post.minutes} 分钟阅读</span>`;
+}
+function placeMarkup(post, className = 'post-place') {
+  const label = post.location || '地点未记录';
+  return `<span class="${className}"><span aria-hidden="true">⌖</span> ${html(label)}</span>`;
 }
 function shell({ title, description, canonical, page, content, article = false }) {
   const fullTitle = title ? `${title} · ${config.name}` : `${config.name} · 随笔`;
@@ -68,10 +72,10 @@ function shell({ title, description, canonical, page, content, article = false }
   <link rel="canonical" href="${html(canonical)}">
   <link rel="alternate" type="application/rss+xml" title="${html(config.name)} RSS" href="${url('feed.xml')}">
   <link rel="icon" href="${url('assets/favicon.svg')}" type="image/svg+xml">
-  <link rel="stylesheet" href="${url('assets/style.css')}?v=writing-1">
+  <link rel="stylesheet" href="${url('assets/style.css')}?v=timeline-1">
   ${page === 'write' ? '<meta name="robots" content="noindex, nofollow">' : ''}
-  <script src="${url('assets/site.js')}?v=writing-1" defer></script>
-  ${page === 'write' ? `<script src="${url('assets/vendor/marked.umd.js')}" defer></script><script src="${url('assets/vendor/purify.min.js')}" defer></script><script src="${url('assets/vendor/mammoth.browser.min.js')}" defer></script><script src="${url('assets/vendor/turndown.js')}" defer></script><script src="${url('assets/write.js')}?v=writing-1" defer></script>` : ''}
+  <script src="${url('assets/site.js')}?v=timeline-1" defer></script>
+  ${page === 'write' ? `<script src="${url('assets/vendor/marked.umd.js')}" defer></script><script src="${url('assets/vendor/purify.min.js')}" defer></script><script src="${url('assets/vendor/mammoth.browser.min.js')}" defer></script><script src="${url('assets/vendor/turndown.js')}" defer></script><script src="${url('assets/write.js')}?v=timeline-1" defer></script>` : ''}
   <title>${html(fullTitle)}</title>
 </head>
 <body class="page-${page}">
@@ -102,9 +106,13 @@ const posts = filenames.map(filename => {
   if (seenSlugs.has(slug)) throw new Error(`Duplicate slug: ${slug}`);
   seenSlugs.add(slug);
   const tags = Array.isArray(data.tags) ? data.tags.map(String) : data.tags ? [String(data.tags)] : [];
-  return { title: String(data.title), date, slug, summary: String(data.summary ?? ''), tags,
+  const time = String(data.time ?? '').trim();
+  const location = String(data.location ?? '').trim();
+  if (time && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error(`${filename}: time must be HH:mm`);
+  if (location.length > 100) throw new Error(`${filename}: location is too long`);
+  return { title: String(data.title), date, time, location, slug, summary: String(data.summary ?? ''), tags,
     minutes: readMinutes(content), body: markdown(content) };
-}).sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
+}).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time) || a.title.localeCompare(b.title));
 
 fs.rmSync(output, { recursive: true, force: true });
 fs.mkdirSync(path.join(output, 'assets'), { recursive: true });
@@ -134,13 +142,10 @@ function postCard(post, index) {
   return `<article class="post-card"><div class="post-card-no">${String(index + 1).padStart(2, '0')}</div><div class="post-card-body"><div class="post-meta">${metaLine(post)}</div><h3><a href="${url(`essays/${post.slug}/`)}">${html(post.title)}</a></h3><p>${html(post.summary)}</p><div class="post-card-bottom">${tagsMarkup(post.tags)}<a class="text-link" href="${url(`essays/${post.slug}/`)}" aria-label="阅读《${html(post.title)}》">阅读全文 <span aria-hidden="true">↗</span></a></div></div></article>`;
 }
 
-const latest = posts.slice(0, 4);
-const home = `<section class="hero" aria-labelledby="hero-title">
-  <div class="hero-copy"><p class="eyebrow"><span class="eyebrow-line"></span> 一处慢慢写字的地方</p><h1 id="hero-title">把日子写成<br><em>可回看的句子。</em></h1><p class="hero-intro">${html(config.tagline)}<br>这里收集日常、阅读，以及那些暂时没有答案的想法。</p><div class="hero-actions"><a class="primary-link" href="${url('archive/')}">读一篇随笔 <span aria-hidden="true">↗</span></a><span class="hero-count">已收录 <strong>${posts.length}</strong> 篇文字</span></div></div>
-  <div class="hero-art" aria-hidden="true"><div class="art-sun"></div><div class="art-mountain art-mountain-back"></div><div class="art-mountain art-mountain-front"></div><div class="art-label">A QUIET PLACE<br>TO KEEP WORDS</div><div class="art-stamp">随<br>笔</div></div>
-</section>
-<section class="home-section" aria-labelledby="latest-title"><div class="section-head"><div><p class="eyebrow">RECENT WRITING / 近期文字</p><h2 id="latest-title">最近写下的</h2></div><a href="${url('archive/')}">查看全部文章 <span aria-hidden="true">↗</span></a></div><div class="post-list">${latest.length ? latest.map(postCard).join('') : '<p class="empty-note">还没有文章。第一篇文字，等你写下。</p>'}</div></section>
-<section class="closing-note"><span class="closing-icon" aria-hidden="true">✳</span><p>不必写得很完整。<br><strong>让念头先有一个落脚的地方。</strong></p><a href="${url('about/')}">关于这个地方 ↗</a></section>`;
+const timelineYears = Map.groupBy(posts, post => post.date.slice(0, 4));
+const timelineEntries = [...timelineYears].map(([yearKey, yearPosts]) => `<div class="timeline-year-group"><h3 class="timeline-year">${yearKey}<small>年</small></h3><div class="timeline-items">${yearPosts.map(post => `<article class="timeline-entry"><div class="timeline-time"><time datetime="${post.date}${post.time ? `T${post.time}:00+08:00` : ''}"><strong>${post.date.slice(5).replace('-', '.')}</strong><span>${post.time ? html(post.time) : '时刻未记录'}</span></time></div><div class="timeline-rail"><span class="timeline-dot"></span></div><div class="timeline-card"><div class="timeline-card-top">${placeMarkup(post, 'timeline-place')}<span>${post.minutes} 分钟阅读</span></div><h4><a href="${url(`essays/${post.slug}/`)}">${html(post.title)}</a></h4><p>${html(post.summary)}</p><div class="timeline-card-bottom"><div>${tagsMarkup(post.tags)}</div><a href="${url(`essays/${post.slug}/`)}" aria-label="阅读《${html(post.title)}》">读这篇随笔 ↗</a></div></div></article>`).join('')}</div></div>`).join('');
+const home = `<section class="timeline-hero" aria-labelledby="timeline-hero-title"><div class="timeline-hero-copy"><p class="eyebrow">TIME NOTES / 我的时间链路</p><h1 id="timeline-hero-title">时间有迹，<br><em>文字有处可去。</em></h1><p>沿着时间往回走，读那时写下的随笔，也记住它发生的地方。</p><a class="primary-link" href="${url('write/')}">写下此刻 <span aria-hidden="true">↗</span></a></div><div class="timeline-hero-art" aria-hidden="true"><div class="timeline-orbit"><span class="orbit-center">此刻</span><i class="orbit-dot orbit-dot-one"></i><i class="orbit-dot orbit-dot-two"></i><i class="orbit-dot orbit-dot-three"></i></div><span class="orbit-caption">每个时刻<br>都值得留下</span></div></section>
+<section class="timeline-section" aria-labelledby="timeline-title"><div class="section-head"><div><p class="eyebrow">THE TIMELINE / 时间链路</p><h2 id="timeline-title">沿着时间，慢慢读</h2></div><span class="timeline-count">${posts.length} 个时间节点</span></div>${posts.length ? `<div class="timeline-list">${timelineEntries}</div>` : `<div class="timeline-empty"><p>时间链路还没有节点。</p><a href="${url('write/')}">写下第一篇随笔 ↗</a></div>`}<div class="timeline-end"><span>✳</span><p>时间在继续，下一篇也会来到这里。</p><a href="${url('archive/')}">查看文章归档 ↗</a></div></section>`;
 writePage('index.html', shell({ title: '', description: config.description, canonical: absolute(), page: 'home', content: home }));
 
 const byYear = Map.groupBy(posts, post => post.date.slice(0, 4));
@@ -157,7 +162,7 @@ const writing = `<section class="page-heading write-heading"><p class="eyebrow">
 <section id="writing-app" class="writing-app" data-base-path="${html(basePath)}" data-site-url="${html(siteUrl)}" data-owner="htf100" data-repo="suibi">
   <div class="writing-topbar"><div><strong>我的草稿</strong><span id="draft-count">0 篇</span></div><div class="writing-top-actions"><button id="new-draft" type="button">＋ 新建</button><label class="import-button" for="import-file">↑ 导入文件</label><input id="import-file" type="file" accept=".md,.markdown,.txt,.docx,text/markdown,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></div></div>
   <div class="writing-layout"><aside class="draft-panel" aria-label="草稿列表"><div id="draft-list" class="draft-list"></div><p class="draft-note">草稿只保存在当前浏览器。换设备前请下载 Markdown 备份。</p></aside>
-  <div class="editor-panel"><div class="editor-meta"><label>标题<input id="essay-title" type="text" maxlength="100" placeholder="给这篇随笔起个名字"></label><div class="editor-meta-row"><label>日期<input id="essay-date" type="date"></label><label>标签 <small>用逗号分开</small><input id="essay-tags" type="text" placeholder="日常, 阅读"></label></div><label>一句话简介 <small>可留空</small><input id="essay-summary" type="text" maxlength="180" placeholder="这篇文章想说什么？"></label><label>文章地址 <small>小写英文、数字和短横线</small><input id="essay-slug" type="text" pattern="[a-z0-9-]+" placeholder="例如 my-first-essay"></label></div>
+  <div class="editor-panel"><div class="editor-meta"><label>标题<input id="essay-title" type="text" maxlength="100" placeholder="给这篇随笔起个名字"></label><div class="editor-meta-row date-time-row"><label>写作日期<input id="essay-date" type="date"></label><label>写作时间<input id="essay-time" type="time"></label></div><div class="editor-meta-row place-row"><label>写作地点<input id="essay-location" type="text" maxlength="100" placeholder="例如：家中、上海 · 静安"></label><label>标签 <small>用逗号分开</small><input id="essay-tags" type="text" placeholder="日常, 阅读"></label></div><label>一句话简介 <small>可留空</small><input id="essay-summary" type="text" maxlength="180" placeholder="这篇文章想说什么？"></label><label>文章地址 <small>小写英文、数字和短横线</small><input id="essay-slug" type="text" pattern="[a-z0-9-]+" placeholder="例如 my-first-essay"></label></div>
   <div class="editor-toolbar"><span>正文</span><div><button type="button" data-insert="heading" title="小标题">标题</button><button type="button" data-insert="bold" title="加粗">加粗</button><button type="button" data-insert="quote" title="引用">引用</button><button type="button" data-insert="list" title="列表">列表</button><button type="button" data-insert="link" title="链接">链接</button></div></div>
   <div class="writing-columns"><label class="editor-body-label"><span class="sr-only">随笔正文</span><textarea id="essay-body" spellcheck="true" placeholder="从今天的一句话开始写……"></textarea></label><div class="preview-panel"><div class="preview-label">实时预览</div><div id="essay-preview" class="prose"></div></div></div>
   <div class="editor-actions"><div id="save-status" class="save-status" role="status">还没有内容</div><div><button id="delete-draft" type="button" class="muted-button">删除草稿</button><button id="download-draft" type="button" class="muted-button">下载 Markdown</button><button id="save-draft" type="button" class="soft-button">保存草稿</button><button id="open-publish" type="button" class="publish-button">发布到网站 ↗</button></div></div>
@@ -170,11 +175,11 @@ for (let i = 0; i < posts.length; i++) {
   const post = posts[i];
   const previous = posts[i + 1];
   const next = posts[i - 1];
-  const content = `<article class="essay"><header class="essay-header"><a class="back-link" href="${url('archive/')}" aria-label="返回文章归档">← 返回文章归档</a><div class="post-meta">${metaLine(post)}</div><h1>${html(post.title)}</h1><p class="essay-summary">${html(post.summary)}</p><div class="essay-tags">${tagsMarkup(post.tags)}</div></header><div class="prose essay-body">${post.body}</div><footer class="essay-footer"><div class="essay-endmark" aria-label="文章结束">✳</div><p>写于 ${dateLabel(post.date)}</p><div class="essay-nav">${previous ? `<a href="${url(`essays/${previous.slug}/`)}"><small>上一篇</small><strong>← ${html(previous.title)}</strong></a>` : '<span></span>'}${next ? `<a href="${url(`essays/${next.slug}/`)}"><small>下一篇</small><strong>${html(next.title)} →</strong></a>` : '<span></span>'}</div></footer></article>`;
+  const content = `<article class="essay"><header class="essay-header"><a class="back-link" href="${url('archive/')}" aria-label="返回文章归档">← 返回文章归档</a><div class="post-meta">${metaLine(post)}</div><h1>${html(post.title)}</h1><p class="essay-summary">${html(post.summary)}</p><div class="essay-location">${placeMarkup(post)}</div><div class="essay-tags">${tagsMarkup(post.tags)}</div></header><div class="prose essay-body">${post.body}</div><footer class="essay-footer"><div class="essay-endmark" aria-label="文章结束">✳</div><p>写于 ${dateLabel(post.date)}${post.time ? ` ${html(post.time)}` : ''} · ${html(post.location || '地点未记录')}</p><div class="essay-nav">${previous ? `<a href="${url(`essays/${previous.slug}/`)}"><small>上一篇</small><strong>← ${html(previous.title)}</strong></a>` : '<span></span>'}${next ? `<a href="${url(`essays/${next.slug}/`)}"><small>下一篇</small><strong>${html(next.title)} →</strong></a>` : '<span></span>'}</div></footer></article>`;
   writePage(`essays/${post.slug}/index.html`, shell({ title: post.title, description: post.summary || config.description, canonical: absolute(`essays/${post.slug}/`), page: 'essay', content, article: true }));
 }
 
-const rssItems = posts.slice(0, 20).map(post => `<item><title>${xml(post.title)}</title><link>${xml(absolute(`essays/${post.slug}/`))}</link><guid>${xml(absolute(`essays/${post.slug}/`))}</guid><description>${xml(post.summary)}</description><pubDate>${new Date(`${post.date}T12:00:00Z`).toUTCString()}</pubDate></item>`).join('');
+const rssItems = posts.slice(0, 20).map(post => `<item><title>${xml(post.title)}</title><link>${xml(absolute(`essays/${post.slug}/`))}</link><guid>${xml(absolute(`essays/${post.slug}/`))}</guid><description>${xml(post.summary)}</description><pubDate>${new Date(`${post.date}T${post.time || '12:00'}:00+08:00`).toUTCString()}</pubDate></item>`).join('');
 writePage('feed.xml', `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${xml(config.name)}</title><link>${xml(absolute())}</link><description>${xml(config.description)}</description><language>zh-CN</language>${rssItems}</channel></rss>`);
 writePage('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${['', 'archive/', 'about/', ...posts.map(post => `essays/${post.slug}/`)].map(part => `<url><loc>${xml(absolute(part))}</loc></url>`).join('')}</urlset>`);
 writePage('robots.txt', `User-agent: *\nAllow: /\nSitemap: ${absolute('sitemap.xml')}\n`);

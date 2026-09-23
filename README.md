@@ -1,12 +1,12 @@
 # 我的随笔-tf
 
-一个发布在 GitHub Pages 的个人随笔网站。可以直接在网页里写作、保存草稿、导入文件和发布。发布后自动更新首页、归档、正文、RSS 和站点地图。
+一个发布在 GitHub Pages 的个人随笔网站。可以直接在网页里写作、保存草稿、导入文件和发布。首页以时间链路展示文章，每个节点显示写作日期、时间和地点名称；发布后自动更新归档、正文、RSS 和站点地图。
 
 ## 在网站里写作
 
 打开 [写随笔](https://htf100.github.io/suibi/write/)：
 
-1. 在编辑框输入标题和正文，草稿会自动保存在**当前浏览器**；也可以点「保存草稿」。可以新建多篇草稿，右侧实时预览。
+1. 在编辑框输入标题和正文，按需填写写作时间与地点名称。新草稿会自动带入当前日期和时间。草稿会自动保存在**当前浏览器**；也可以点「保存草稿」。可以新建多篇草稿，右侧实时预览。
 2. 已写好的文件点「导入文件」选择 `.md`、`.txt` 或 `.docx`。Word 文档会转成 Markdown，保留基本标题、加粗、列表等格式；Word 中的图片暂时不会导入。
 3. 点「下载 Markdown」可备份当前草稿。换浏览器、换设备或清除网站数据前，先下载备份。
 4. 准备公开时点「发布到网站」。首次使用需要在 GitHub [创建细粒度令牌](https://github.com/settings/personal-access-tokens/new)：Resource owner 选 `htf100`，Repository access 选 **Only select repositories → suibi**，Repository permissions 中将 **Contents** 设为 **Read and write**。复制令牌，粘贴到发布区，点「确认发布」。**不要把令牌发给别人，也不要写进文章。**
@@ -23,6 +23,8 @@
 ---
 title: 秋天的散步
 date: 2026-09-24
+time: "16:30"
+location: 家中
 summary: 这篇随笔的一句话简介，会显示在首页和归档中。
 tags: [日常, 散步]
 slug: autumn-walk
@@ -32,6 +34,8 @@ slug: autumn-walk
 ```
 
 点 **Commit changes** 保存到 `main`，等 GitHub Actions 完成，网站就会更新。`slug` 用小写英文字母、数字和短横线，写好后尽量别改，否则文章地址会变。图片放进 `assets`，文章里写 `![图片说明]({{baseurl}}assets/文件名.jpg)`。
+
+`time` 用 24 小时格式 `HH:mm`；`location` 只写要展示的地点名称，例如城市、街区或房间。未填写地点的旧文章会显示「地点未记录」。
 
 仓库中现有的两篇文章是**示例**。开始写自己的随笔后，可以修改或删除 `posts/2026-09-23-welcome.md` 和 `posts/2026-09-22-another-day.md`。
 
