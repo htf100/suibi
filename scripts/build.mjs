@@ -5,6 +5,8 @@ import { build } from 'esbuild';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, 'dist');
+const localEnv = path.join(root, '.env.local');
+if (fs.existsSync(localEnv)) process.loadEnvFile(localEnv);
 const site = JSON.parse(fs.readFileSync(path.join(root, 'site.json'), 'utf8'));
 const basePath = `/${(process.env.BASE_PATH ?? '/').split('/').filter(Boolean).join('/')}/`.replace('//', '/');
 const projectUrl = process.env.SUPABASE_URL ?? '';

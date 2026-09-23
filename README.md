@@ -31,8 +31,16 @@
 
 ```bash
 npm ci
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx npm run preview
 ```
+
+在项目根目录创建不会提交到 Git 的 `.env.local`：
+
+```dotenv
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
+```
+
+然后运行 `npm run preview`。
 
 打开 `http://localhost:8080/`。不提供后台配置时，页面只显示“私人空间正在准备”。请使用测试项目与测试账号验证邀请、登录和权限。不要把真实服务密钥写进 `.env` 或提交到 GitHub。
 
