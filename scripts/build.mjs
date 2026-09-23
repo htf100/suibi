@@ -3,6 +3,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
 import { marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+
+marked.setOptions({ gfm: true, breaks: true });
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, 'dist');
@@ -23,7 +26,13 @@ function html(value) {
 function xml(value) { return html(value); }
 function url(part = '') { return basePath + part.replace(/^\//, ''); }
 function absolute(part = '') { return siteUrl + part.replace(/^\//, ''); }
-function markdown(value) { return marked.parse(value.replaceAll('{{baseurl}}', basePath)); }
+function markdown(value) {
+  return sanitizeHtml(marked.parse(value.replaceAll('{{baseurl}}', basePath)), {
+    allowedTags: [...sanitizeHtml.defaults.allowedTags, 'img', 'h1', 'h2'],
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes, a: ['href', 'title'], img: ['src', 'alt', 'title'] },
+    allowedSchemes: ['http', 'https', 'mailto']
+  });
+}
 function dateLabel(date) {
   return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
 }
@@ -59,8 +68,10 @@ function shell({ title, description, canonical, page, content, article = false }
   <link rel="canonical" href="${html(canonical)}">
   <link rel="alternate" type="application/rss+xml" title="${html(config.name)} RSS" href="${url('feed.xml')}">
   <link rel="icon" href="${url('assets/favicon.svg')}" type="image/svg+xml">
-  <link rel="stylesheet" href="${url('assets/style.css')}">
-  <script src="${url('assets/site.js')}" defer></script>
+  <link rel="stylesheet" href="${url('assets/style.css')}?v=writing-1">
+  ${page === 'write' ? '<meta name="robots" content="noindex, nofollow">' : ''}
+  <script src="${url('assets/site.js')}?v=writing-1" defer></script>
+  ${page === 'write' ? `<script src="${url('assets/vendor/marked.umd.js')}" defer></script><script src="${url('assets/vendor/purify.min.js')}" defer></script><script src="${url('assets/vendor/mammoth.browser.min.js')}" defer></script><script src="${url('assets/vendor/turndown.js')}" defer></script><script src="${url('assets/write.js')}?v=writing-1" defer></script>` : ''}
   <title>${html(fullTitle)}</title>
 </head>
 <body class="page-${page}">
@@ -68,7 +79,7 @@ function shell({ title, description, canonical, page, content, article = false }
   <div class="site-wrap">
     <header class="site-header">
       <a class="brand" href="${url()}" aria-label="${html(config.name)}，返回首页"><span class="brand-mark" aria-hidden="true">✳</span><span>${html(config.name)}<small>PERSONAL ESSAYS</small></span></a>
-      <nav aria-label="主导航"><a href="${url()}"${page === 'home' ? ' aria-current="page"' : ''}>首页</a><a href="${url('archive/')}"${page === 'archive' ? ' aria-current="page"' : ''}>文章归档</a><a href="${url('about/')}"${page === 'about' ? ' aria-current="page"' : ''}>关于</a></nav>
+      <nav aria-label="主导航"><a href="${url()}"${page === 'home' ? ' aria-current="page"' : ''}>首页</a><a href="${url('archive/')}"${page === 'archive' ? ' aria-current="page"' : ''}>文章归档</a><a href="${url('about/')}"${page === 'about' ? ' aria-current="page"' : ''}>关于</a><a href="${url('write/')}"${page === 'write' ? ' aria-current="page"' : ''}>写随笔</a></nav>
     </header>
     <main id="main">${content}</main>
     <footer class="site-footer"><p>${html(config.footer)} <span>© ${year} ${html(config.author)}</span></p><a href="${url('feed.xml')}">RSS 订阅 ↗</a></footer>
@@ -98,8 +109,25 @@ const posts = filenames.map(filename => {
 fs.rmSync(output, { recursive: true, force: true });
 fs.mkdirSync(path.join(output, 'assets'), { recursive: true });
 for (const asset of fs.readdirSync(path.join(root, 'assets'))) {
-  fs.copyFileSync(path.join(root, 'assets', asset), path.join(output, 'assets', asset));
+  const source = path.join(root, 'assets', asset);
+  if (fs.statSync(source).isFile()) fs.copyFileSync(source, path.join(output, 'assets', asset));
 }
+const vendor = path.join(output, 'assets', 'vendor');
+fs.mkdirSync(vendor, { recursive: true });
+for (const [source, target] of [
+  ['marked/lib/marked.umd.js', 'marked.umd.js'],
+  ['dompurify/dist/purify.min.js', 'purify.min.js'],
+  ['mammoth/mammoth.browser.min.js', 'mammoth.browser.min.js'],
+  ['turndown/dist/turndown.js', 'turndown.js']
+]) fs.copyFileSync(path.join(root, 'node_modules', source), path.join(vendor, target));
+const licenses = path.join(vendor, 'licenses');
+fs.mkdirSync(licenses, { recursive: true });
+for (const [source, target] of [
+  ['marked/LICENSE.md', 'marked.txt'],
+  ['dompurify/LICENSE', 'dompurify.txt'],
+  ['mammoth/LICENSE', 'mammoth.txt'],
+  ['turndown/LICENSE', 'turndown.txt']
+]) fs.copyFileSync(path.join(root, 'node_modules', source), path.join(licenses, target));
 fs.writeFileSync(path.join(output, '.nojekyll'), '');
 
 function postCard(post, index) {
@@ -124,6 +152,19 @@ writePage('archive/index.html', shell({ title: '文章归档', description: '浏
 const aboutBody = markdown(fs.readFileSync(path.join(root, 'about.md'), 'utf8'));
 const about = `<section class="page-heading"><p class="eyebrow">A LITTLE ABOUT / 关于</p><h1>关于这里<span class="title-period">。</span></h1><p>有些话，写下来才知道自己在想什么。</p></section><section class="about-layout"><div class="about-quote" aria-hidden="true"><span>“</span><p>写下来，<br>慢慢看。</p><i>${html(config.name)} · ${year}</i></div><div class="prose about-prose">${aboutBody}</div></section>`;
 writePage('about/index.html', shell({ title: '关于', description: `关于${config.name}和这里的文字。`, canonical: absolute('about/'), page: 'about', content: about }));
+
+const writing = `<section class="page-heading write-heading"><p class="eyebrow">WRITE YOUR WORDS / 写随笔</p><h1>把今天写下来<span class="title-period">。</span></h1><p>直接写，或导入写好的文件。草稿留在这台设备，发布后出现在文章列表。</p></section>
+<section id="writing-app" class="writing-app" data-base-path="${html(basePath)}" data-site-url="${html(siteUrl)}" data-owner="htf100" data-repo="suibi">
+  <div class="writing-topbar"><div><strong>我的草稿</strong><span id="draft-count">0 篇</span></div><div class="writing-top-actions"><button id="new-draft" type="button">＋ 新建</button><label class="import-button" for="import-file">↑ 导入文件</label><input id="import-file" type="file" accept=".md,.markdown,.txt,.docx,text/markdown,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></div></div>
+  <div class="writing-layout"><aside class="draft-panel" aria-label="草稿列表"><div id="draft-list" class="draft-list"></div><p class="draft-note">草稿只保存在当前浏览器。换设备前请下载 Markdown 备份。</p></aside>
+  <div class="editor-panel"><div class="editor-meta"><label>标题<input id="essay-title" type="text" maxlength="100" placeholder="给这篇随笔起个名字"></label><div class="editor-meta-row"><label>日期<input id="essay-date" type="date"></label><label>标签 <small>用逗号分开</small><input id="essay-tags" type="text" placeholder="日常, 阅读"></label></div><label>一句话简介 <small>可留空</small><input id="essay-summary" type="text" maxlength="180" placeholder="这篇文章想说什么？"></label><label>文章地址 <small>小写英文、数字和短横线</small><input id="essay-slug" type="text" pattern="[a-z0-9-]+" placeholder="例如 my-first-essay"></label></div>
+  <div class="editor-toolbar"><span>正文</span><div><button type="button" data-insert="heading" title="小标题">标题</button><button type="button" data-insert="bold" title="加粗">加粗</button><button type="button" data-insert="quote" title="引用">引用</button><button type="button" data-insert="list" title="列表">列表</button><button type="button" data-insert="link" title="链接">链接</button></div></div>
+  <div class="writing-columns"><label class="editor-body-label"><span class="sr-only">随笔正文</span><textarea id="essay-body" spellcheck="true" placeholder="从今天的一句话开始写……"></textarea></label><div class="preview-panel"><div class="preview-label">实时预览</div><div id="essay-preview" class="prose"></div></div></div>
+  <div class="editor-actions"><div id="save-status" class="save-status" role="status">还没有内容</div><div><button id="delete-draft" type="button" class="muted-button">删除草稿</button><button id="download-draft" type="button" class="muted-button">下载 Markdown</button><button id="save-draft" type="button" class="soft-button">保存草稿</button><button id="open-publish" type="button" class="publish-button">发布到网站 ↗</button></div></div>
+  <section id="publish-panel" class="publish-panel" hidden aria-labelledby="publish-title"><div class="publish-head"><div><p class="eyebrow">GITHUB PUBLISHING</p><h2 id="publish-title">发布这篇随笔</h2></div><button id="close-publish" type="button" aria-label="关闭发布区">×</button></div><p>首次使用，请<a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">创建 GitHub 细粒度令牌 ↗</a>：账号选 <strong>htf100</strong>，仓库仅选 <strong>suibi</strong>，将 <strong>Contents</strong> 设为 <strong>Read and write</strong>。令牌只在当前页面使用，不保存到草稿或浏览器存储。</p><label>GitHub 令牌<input id="github-token" type="password" autocomplete="off" placeholder="粘贴 GitHub 令牌"></label><div class="publish-controls"><button id="confirm-publish" type="button" class="publish-button">确认发布</button><span id="publish-status" role="status" aria-live="polite"></span></div></section>
+  </div></div>
+</section>`;
+writePage('write/index.html', shell({ title: '写随笔', description: '写作、保存草稿或导入文件。', canonical: absolute('write/'), page: 'write', content: writing }));
 
 for (let i = 0; i < posts.length; i++) {
   const post = posts[i];

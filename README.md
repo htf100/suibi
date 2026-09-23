@@ -1,10 +1,23 @@
 # 我的随笔-tf
 
-一个可发布到 GitHub Pages 的个人随笔网站。文章写成 Markdown 文件，推送到 GitHub 后自动生成首页、归档、正文、RSS 和站点地图。网站无数据库，访客无需登录。
+一个发布在 GitHub Pages 的个人随笔网站。可以直接在网页里写作、保存草稿、导入文件和发布。发布后自动更新首页、归档、正文、RSS 和站点地图。
 
-## 写一篇随笔
+## 在网站里写作
 
-在 GitHub 仓库的 `posts` 文件夹点击 **Add file → Create new file**，按 `年-月-日-英文名.md` 命名，例如 `2026-09-24-autumn-walk.md`，填写：
+打开 [写随笔](https://htf100.github.io/suibi/write/)：
+
+1. 在编辑框输入标题和正文，草稿会自动保存在**当前浏览器**；也可以点「保存草稿」。可以新建多篇草稿，右侧实时预览。
+2. 已写好的文件点「导入文件」选择 `.md`、`.txt` 或 `.docx`。Word 文档会转成 Markdown，保留基本标题、加粗、列表等格式；Word 中的图片暂时不会导入。
+3. 点「下载 Markdown」可备份当前草稿。换浏览器、换设备或清除网站数据前，先下载备份。
+4. 准备公开时点「发布到网站」。首次使用需要在 GitHub [创建细粒度令牌](https://github.com/settings/personal-access-tokens/new)：Resource owner 选 `htf100`，Repository access 选 **Only select repositories → suibi**，Repository permissions 中将 **Contents** 设为 **Read and write**。复制令牌，粘贴到发布区，点「确认发布」。**不要把令牌发给别人，也不要写进文章。**
+
+令牌只用于当次浏览器页面的 GitHub API 请求，不存入草稿或浏览器存储；提交成功后输入框会清空。GitHub Actions 会自动更新公开网站。草稿仍留在本机，方便继续修改。
+
+同一个浏览器中的已发布草稿可以再编辑并重新发布。若从其他设备修改同一篇文章，重新发布前先核对 GitHub 上的版本，以免覆盖。
+
+## 直接在 GitHub 写 Markdown
+
+也可以在 GitHub 仓库的 `posts` 文件夹点击 **Add file → Create new file**，按 `年-月-日-英文名.md` 命名，例如 `2026-09-24-autumn-walk.md`，填写：
 
 ```md
 ---
