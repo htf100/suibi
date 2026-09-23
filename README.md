@@ -1,70 +1,43 @@
-# 我的随笔-tf
+# 我的随笔-tf · 私人版
 
-一个发布在 GitHub Pages 的个人随笔网站。可以直接在网页里写作、保存草稿、导入文件和发布。首页以时间链路展示文章，每个节点显示写作日期、时间和地点名称；发布后自动更新归档、正文、RSS 和站点地图。
+这是私人随笔网站的源码。前端仍由 GitHub Pages 提供，但随笔正文不再写入 GitHub 仓库或静态页面。登录由 Supabase Auth 负责，随笔存在 Supabase Postgres 中；数据库行级安全策略按作者账号限制读取、写入和删除。管理员可以邀请或停用账号，但网站内也只能看到自己的随笔。
 
-## 在网站里写作
+**现有公开网站仍由 `main` 分支运行。** 私人版开发分支完成后台配置、账号登录和权限测试后，再合并到 `main`。构建流程要求后台配置齐全才会发布私人版。
 
-打开 [写随笔](https://htf100.github.io/suibi/write/)：
+## 功能
 
-1. 在编辑框输入标题和正文，按需填写写作时间与地点名称。新草稿会自动带入当前日期和时间。草稿会自动保存在**当前浏览器**；也可以点「保存草稿」。可以新建多篇草稿，右侧实时预览。
-   - 想记录此刻的位置，可以在 HTTPS 网站的写作页点击「获取当前位置」，允许浏览器使用精确定位，然后从附近地点中选具体的楼栋、景点区域或小区。请核对候选名称；定位精度和地图资料不一定能识别到楼层或每一栋建筑，也可以直接在地点框改写。
-   - 只有点击定位后，坐标才会临时发送给 Photon 查询附近的 OpenStreetMap 地点。**草稿、下载的 Markdown 和公开文章只保存你选定的地点名称，不保存经纬度。**如果定位被拒绝、精度不足或地点服务不可用，可以手动填写。
-2. 已写好的文件点「导入文件」选择 `.md`、`.txt` 或 `.docx`。Word 文档会转成 Markdown，保留基本标题、加粗、列表等格式；Word 中的图片暂时不会导入。
-3. 点「下载 Markdown」可备份当前草稿。换浏览器、换设备或清除网站数据前，先下载备份。
-4. 准备公开时点「发布到网站」。首次使用需要在 GitHub [创建细粒度令牌](https://github.com/settings/personal-access-tokens/new)：Resource owner 选 `htf100`，Repository access 选 **Only select repositories → suibi**，Repository permissions 中将 **Contents** 设为 **Read and write**。复制令牌，粘贴到发布区，点「确认发布」。**不要把令牌发给别人，也不要写进文章。**
+- 受邀邮箱登录；邀请链接首次进入后设置密码，支持密码重置。
+- 每人独立的私人时间链路、草稿、写作页和 Markdown 备份。
+- 可导入 `.md`、`.txt`、`.docx`；Word 图片暂不导入。
+- 可选浏览器定位，选择附近地点名称，也可手动改写。点击定位才会把坐标发送给 Photon 查询 OpenStreetMap；数据库只保存地点名称。
+- 管理员在网站里邀请、启用和停用账号。管理员界面不显示他人随笔。
+- 旧版浏览器草稿可在登录后手动导入；导入成功才清除旧版浏览器副本。
 
-令牌只用于当次浏览器页面的 GitHub API 请求，不存入草稿或浏览器存储；提交成功后输入框会清空。GitHub Actions 会自动更新公开网站。草稿仍留在本机，方便继续修改。
+## 配置 Supabase
 
-同一个浏览器中的已发布草稿可以再编辑并重新发布。若从其他设备修改同一篇文章，重新发布前先核对 GitHub 上的版本，以免覆盖。
+1. 创建 Supabase 项目。Authentication → Sign In / Providers → Email 保持启用；关闭 **Allow new users to sign up** 和匿名登录。这样只有受邀账号能进入。
+2. Authentication → URL Configuration 中将 Site URL 设置为 `https://htf100.github.io/suibi/`，并把同一地址加入 Redirect URLs。需要本地测试邀请时，再增加 `http://localhost:8080/`。
+3. 在 SQL Editor 执行 [`supabase/migrations/202609230001_private_accounts.sql`](supabase/migrations/202609230001_private_accounts.sql)。这里创建成员表和随笔表，并启用行级安全策略。切勿给 `anon` 创建随笔读取策略，也不要添加“管理员可读全部随笔”的策略。
+4. 在 Authentication → Users 邀请站点所有者的邮箱。创建邀请后，先从该用户详情复制 Auth user UUID，在 SQL Editor 中执行迁移文件末尾的 `insert into public.members ... role = 'owner'`，将这个 UUID 和邮箱替换进去，再打开邀请链接设置密码。不要用邮箱文本直接当权限依据。
+5. 将 `supabase/functions/manage-members` 部署为 Edge Function。该函数设置 `verify_jwt = false`，但**每次请求都会调用 Auth 验证登录令牌，再核对 `members` 中的管理员身份**。设置函数秘密变量 `APP_URL=https://htf100.github.io/suibi/`。`SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY` 通常由 Supabase 提供；如果项目使用新式密钥，另设 `SUPABASE_SECRET_KEY`。秘密密钥只允许放在函数环境，绝不能放进 GitHub Pages、仓库或浏览器。
+6. 在 GitHub 仓库 Settings → Secrets and variables → Actions → Variables 添加 `SUPABASE_URL` 和 `SUPABASE_PUBLISHABLE_KEY`。这两个值是供浏览器使用的项目地址和公开密钥，安全边界由登录令牌与数据库策略承担。不要填 secret/service role key。
+7. 使用两个不同受邀账号验证：A 只能读取、修改自己的随笔；B 只能读取、修改自己的随笔；管理员账号能邀请和停用成员，但列表及文章页只显示自己的随笔。确认后再把私人版分支合并到 `main`，等待 GitHub Pages 部署完成，然后核对旧文章 URL、RSS 和站点地图已消失。
 
-## 直接在 GitHub 写 Markdown
-
-也可以在 GitHub 仓库的 `posts` 文件夹点击 **Add file → Create new file**，按 `年-月-日-英文名.md` 命名，例如 `2026-09-24-autumn-walk.md`，填写：
-
-```md
----
-title: 秋天的散步
-date: 2026-09-24
-time: "16:30"
-location: 家中
-summary: 这篇随笔的一句话简介，会显示在首页和归档中。
-tags: [日常, 散步]
-slug: autumn-walk
----
-
-从这里开始写正文。支持 **加粗**、[链接](https://example.com)、列表、引用和图片。
-```
-
-点 **Commit changes** 保存到 `main`，等 GitHub Actions 完成，网站就会更新。`slug` 用小写英文字母、数字和短横线，写好后尽量别改，否则文章地址会变。图片放进 `assets`，文章里写 `![图片说明]({{baseurl}}assets/文件名.jpg)`。
-
-`time` 用 24 小时格式 `HH:mm`；`location` 只写要展示的地点名称，例如楼栋、景点区域或房间。未填写地点的旧文章会显示「地点未记录」。
-
-仓库中现有的两篇文章是**示例**。开始写自己的随笔后，可以修改或删除 `posts/2026-09-23-welcome.md` 和 `posts/2026-09-22-another-day.md`。
-
-## 改网站信息
-
-- 网站名、笔名、首页短句：编辑 `site.json`。
-- “关于”页：编辑 `about.md`。
-- 配色、字号、布局：编辑 `assets/style.css`。
+**已公开过的文章无法靠登录功能变成秘密。** 它们可能仍在 Git 历史、搜索缓存或读者保存的副本中。当前仓库里的两篇文章只是示例；如果曾自行发布真实内容，要单独检查历史与缓存。
 
 ## 本地预览
 
-需要 Node.js 22 或更新版本，以及 Python 3：
+需要 Node.js 22 或更高版本：
 
 ```bash
 npm ci
-npm run preview
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx npm run preview
 ```
 
-打开 `http://localhost:8080/`。构建后的文件在 `dist/`，不需要提交。
+打开 `http://localhost:8080/`。不提供后台配置时，页面只显示“私人空间正在准备”。请使用测试项目与测试账号验证邀请、登录和权限。不要把真实服务密钥写进 `.env` 或提交到 GitHub。
 
-## 发布到 GitHub Pages
+## 安全边界
 
-此项目配置为 `htf100/suibi`，目标地址是 `https://htf100.github.io/suibi/`。
-
-1. 用 `htf100` 登录 GitHub，新建公开仓库 `suibi`。
-2. 把本目录中的文件推送到仓库的 `main` 分支。
-3. 在仓库 **Settings → Pages → Build and deployment → Source** 中选择 **GitHub Actions**。
-4. 打开 **Actions** 等待 `Deploy essays` 成功，再访问网站地址。
-
-如果仓库名或域名变了，要同步修改 `.github/workflows/pages.yml` 中的 `BASE_PATH` 和 `SITE_URL`。根域名发布时 `BASE_PATH` 应为 `/`。
+- GitHub Pages 仍向所有访问者发送页面代码；登录前不会发送私人随笔正文。真正的读取权限由 Supabase Auth 和 Postgres RLS 执行，不能只靠隐藏前端元素。
+- 站点管理员的网页权限只包含成员管理和自己的随笔。Supabase 项目所有者通过数据库控制台仍可能读取数据；若需要连后台所有者都无法解读内容，必须另做端到端加密。
+- 停用账号会阻止后续数据库请求，但无法收回该账号过去已下载、截图或打开在浏览器里的内容。

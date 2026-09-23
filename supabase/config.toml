@@ -1,0 +1,2 @@
+[functions.manage-members]
+verify_jwt = false # This function verifies the bearer token with Auth and checks owner membership itself.
