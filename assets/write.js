@@ -15,9 +15,102 @@
   };
   const saveStatus = $('#save-status');
   const publishStatus = $('#publish-status');
+  const locateButton = $('#locate-now');
+  const locationStatus = $('#location-status');
+  const locationSuggestions = $('#location-suggestions');
   let drafts = readDrafts();
   let activeId = localStorage.getItem(activeKey);
   let saveTimer;
+
+  function clearLocationSuggestions() {
+    locationSuggestions.replaceChildren();
+    locationSuggestions.hidden = true;
+  }
+  function distanceMeters(lat1, lon1, lat2, lon2) {
+    const radians = degrees => degrees * Math.PI / 180;
+    const a = Math.sin(radians(lat2 - lat1) / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(radians(lon2 - lon1) / 2) ** 2;
+    return Math.round(12742000 * Math.asin(Math.min(1, Math.sqrt(a))));
+  }
+  function geolocationPosition() {
+    return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true, maximumAge: 0, timeout: 15000
+    }));
+  }
+  async function locateNow() {
+    if (!navigator.geolocation || !window.isSecureContext) {
+      locationStatus.textContent = '当前浏览器无法定位。请使用 HTTPS 页面，或手动填写具体地点。';
+      return;
+    }
+    const draftId = activeId;
+    clearLocationSuggestions();
+    locateButton.disabled = true;
+    locationStatus.textContent = '等待浏览器定位授权…';
+    try {
+      const position = await geolocationPosition();
+      if (draftId !== activeId) return;
+      const { latitude, longitude, accuracy } = position.coords;
+      if (![latitude, longitude, accuracy].every(Number.isFinite)) throw new Error('定位结果无效，请手动填写地点。');
+      if (accuracy > 500) {
+        locationStatus.textContent = `本次定位约有 ${Math.round(accuracy)} 米误差，无法可靠判断楼栋或景点位置。请开启手机精确定位后重试，或手动填写。`;
+        return;
+      }
+      locationStatus.textContent = `定位约有 ${Math.round(accuracy)} 米误差，正在查找附近地点…`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      let data;
+      try {
+        const params = new URLSearchParams({ lon: String(longitude), lat: String(latitude), radius: '0.3', limit: '15' });
+        const response = await fetch(`https://photon.komoot.io/reverse?${params}`, { credentials: 'omit', signal: controller.signal });
+        if (!response.ok) throw new Error('地点服务暂时不可用，请手动填写地点。');
+        data = await response.json();
+      } finally { clearTimeout(timeout); }
+      if (draftId !== activeId) return;
+      const seen = new Set();
+      const candidates = (Array.isArray(data.features) ? data.features : []).flatMap(feature => {
+        const name = feature?.properties?.name?.trim();
+        const kind = feature?.properties?.osm_key;
+        const coords = feature?.geometry?.coordinates;
+        if (!name || name.length > 100 || ['place', 'boundary'].includes(kind) || !Array.isArray(coords) || !Number.isFinite(coords[0]) || !Number.isFinite(coords[1])) return [];
+        const normalized = name.toLocaleLowerCase();
+        if (seen.has(normalized)) return [];
+        seen.add(normalized);
+        return [{ name, distance: distanceMeters(latitude, longitude, coords[1], coords[0]) }];
+      }).sort((a, b) => a.distance - b.distance).slice(0, 8);
+      if (!candidates.length) {
+        locationStatus.textContent = '附近没有识别到具体名称。请在地点框手动写下楼栋、景点区域或小区名称。';
+        return;
+      }
+      const heading = document.createElement('strong');
+      heading.textContent = '选择最符合你所在位置的地点';
+      locationSuggestions.append(heading);
+      for (const candidate of candidates) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'location-option';
+        const name = document.createElement('span');
+        name.textContent = candidate.name;
+        const distance = document.createElement('small');
+        distance.textContent = `约 ${candidate.distance} 米`;
+        button.append(name, distance);
+        button.addEventListener('click', () => {
+          if (draftId !== activeId) return;
+          fields.location.value = candidate.name;
+          scheduleSave();
+          locationStatus.textContent = `已选「${candidate.name}」。如果实际在另一栋楼或景点区域，请修改地点名称。`;
+          clearLocationSuggestions();
+        });
+        locationSuggestions.append(button);
+      }
+      locationSuggestions.hidden = false;
+      locationStatus.textContent = `定位约有 ${Math.round(accuracy)} 米误差；请核对候选名称，选错可以直接修改。`;
+    } catch (error) {
+      if (draftId !== activeId) return;
+      if (error?.code === 1) locationStatus.textContent = '未获得定位权限。可在浏览器设置中允许此网站定位，或手动填写地点。';
+      else if (error?.code === 2) locationStatus.textContent = '暂时无法获取当前位置，请检查设备定位设置，或手动填写地点。';
+      else if (error?.code === 3) locationStatus.textContent = '定位超时，请重试或手动填写地点。';
+      else locationStatus.textContent = error?.name === 'AbortError' ? '查找地点超时，请重试或手动填写地点。' : (error.message || '查找地点失败，请手动填写地点。');
+    } finally { locateButton.disabled = false; }
+  }
 
   function today() {
     const d = new Date();
@@ -69,6 +162,8 @@
     const draft = current();
     if (!draft) return;
     for (const [name, input] of Object.entries(fields)) input.value = draft[name] ?? '';
+    clearLocationSuggestions();
+    locationStatus.textContent = '选择附近地点后可继续修改；公开时只显示地点名称。';
     fields.slug.readOnly = Boolean(draft.publishedPath);
     $('#publish-panel').hidden = true;
     $('#github-token').value = '';
@@ -297,8 +392,9 @@
   loadCurrent();
   persist();
   for (const input of Object.values(fields)) {
-    input.addEventListener('input', () => { renderPreview(); scheduleSave(); });
+    input.addEventListener('input', () => { if (input === fields.location) clearLocationSuggestions(); renderPreview(); scheduleSave(); });
   }
+  locateButton.addEventListener('click', locateNow);
   $('#new-draft').addEventListener('click', createDraft);
   $('#save-draft').addEventListener('click', persist);
   $('#download-draft').addEventListener('click', downloadDraft);

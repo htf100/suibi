@@ -7,6 +7,8 @@
 打开 [写随笔](https://htf100.github.io/suibi/write/)：
 
 1. 在编辑框输入标题和正文，按需填写写作时间与地点名称。新草稿会自动带入当前日期和时间。草稿会自动保存在**当前浏览器**；也可以点「保存草稿」。可以新建多篇草稿，右侧实时预览。
+   - 想记录此刻的位置，可以在 HTTPS 网站的写作页点击「获取当前位置」，允许浏览器使用精确定位，然后从附近地点中选具体的楼栋、景点区域或小区。请核对候选名称；定位精度和地图资料不一定能识别到楼层或每一栋建筑，也可以直接在地点框改写。
+   - 只有点击定位后，坐标才会临时发送给 Photon 查询附近的 OpenStreetMap 地点。**草稿、下载的 Markdown 和公开文章只保存你选定的地点名称，不保存经纬度。**如果定位被拒绝、精度不足或地点服务不可用，可以手动填写。
 2. 已写好的文件点「导入文件」选择 `.md`、`.txt` 或 `.docx`。Word 文档会转成 Markdown，保留基本标题、加粗、列表等格式；Word 中的图片暂时不会导入。
 3. 点「下载 Markdown」可备份当前草稿。换浏览器、换设备或清除网站数据前，先下载备份。
 4. 准备公开时点「发布到网站」。首次使用需要在 GitHub [创建细粒度令牌](https://github.com/settings/personal-access-tokens/new)：Resource owner 选 `htf100`，Repository access 选 **Only select repositories → suibi**，Repository permissions 中将 **Contents** 设为 **Read and write**。复制令牌，粘贴到发布区，点「确认发布」。**不要把令牌发给别人，也不要写进文章。**
@@ -35,7 +37,7 @@ slug: autumn-walk
 
 点 **Commit changes** 保存到 `main`，等 GitHub Actions 完成，网站就会更新。`slug` 用小写英文字母、数字和短横线，写好后尽量别改，否则文章地址会变。图片放进 `assets`，文章里写 `![图片说明]({{baseurl}}assets/文件名.jpg)`。
 
-`time` 用 24 小时格式 `HH:mm`；`location` 只写要展示的地点名称，例如城市、街区或房间。未填写地点的旧文章会显示「地点未记录」。
+`time` 用 24 小时格式 `HH:mm`；`location` 只写要展示的地点名称，例如楼栋、景点区域或房间。未填写地点的旧文章会显示「地点未记录」。
 
 仓库中现有的两篇文章是**示例**。开始写自己的随笔后，可以修改或删除 `posts/2026-09-23-welcome.md` 和 `posts/2026-09-22-another-day.md`。
 
