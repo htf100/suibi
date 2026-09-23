@@ -210,6 +210,8 @@ function currentPayload(status) {
 }
 async function saveEssay(status) {
   if (!user || !member?.active) return;
+  if (status === 'draft' && activeEssay?.status === 'published' &&
+      !confirm('保存为草稿会将这篇随笔从你的时间链路移出。继续吗？')) return;
   let payload;
   try { payload = currentPayload(status); }
   catch (error) { message('#save-status', error.message); return; }
@@ -217,12 +219,16 @@ async function saveEssay(status) {
   button.disabled = true;
   message('#save-status', '正在保存到私人空间…');
   let result;
-  if (activeEssay?.id) {
-    result = await supabase.from('essays').update(payload).eq('id', activeEssay.id).select().single();
-  } else {
-    result = await supabase.from('essays').insert({ ...payload, owner_id: user.id }).select().single();
-  }
-  button.disabled = false;
+  try {
+    if (activeEssay?.id) {
+      result = await supabase.from('essays').update(payload).eq('id', activeEssay.id).select().single();
+    } else {
+      result = await supabase.from('essays').insert({ ...payload, owner_id: user.id }).select().single();
+    }
+  } catch (error) {
+    message('#save-status', errorText(error, '保存失败，请检查网络后重试'));
+    return;
+  } finally { button.disabled = false; }
   if (result.error) return message('#save-status', errorText(result.error, '保存失败'));
   activeEssay = result.data;
   formDirty = false;
